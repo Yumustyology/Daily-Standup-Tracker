@@ -1,37 +1,22 @@
 import { useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { Coffee } from 'lucide-react';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
 
-    try {
-      const { error } = isLogin
-        ? await signIn(email, password)
-        : await signUp(email, password);
+    const action = isLogin ? signIn : signUp;
+    await action(email, password);
 
-      if (error) {
-        setError(error.message);
-      } else {
-        navigate('/dashboard');
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
+    setLoading(false);
   };
 
   return (
@@ -82,12 +67,6 @@ export default function Auth() {
               />
             </div>
 
-            {error && (
-              <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded px-3 py-2">
-                {error}
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={loading}
@@ -99,10 +78,7 @@ export default function Auth() {
 
           <div className="mt-6 text-center">
             <button
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setError('');
-              }}
+              onClick={() => setIsLogin(!isLogin)}
               className="text-sm text-gray-400 hover:text-amber-500 transition-colors"
             >
               {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from './supabase';
 import { User, Session } from '@supabase/supabase-js';
+import toast from 'react-hot-toast';
 
 interface Organization {
   id: string;
@@ -27,94 +28,112 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [organization, setOrganization] = useState<Organization | null>(null);
 
   useEffect(() => {
-    const getSessionAndUser = async () => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setLoading(true);
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-      if (sessionError) {
-        console.error('Error getting session:', sessionError);
-        setLoading(false);
-        return;
-      }
-
       setSession(session);
-      setUser(session?.user ?? null);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
 
-      if (session?.user) {
-        await fetchUserOrganization(session.user.id);
-      } else {
-        setOrganization(null);
+      if (currentUser) {
+        await fetchUserOrganization(currentUser.id);
       }
+
+      if (event === 'SIGNED_IN') {
+        toast.success('Successfully signed in!');
+      } else if (event === 'SIGNED_OUT') {
+        toast.success('Successfully signed out!');
+      } else if (event === 'USER_UPDATED') {
+        toast.success('Email verified successfully!');
+      }
+      
       setLoading(false);
-    };
-
-    getSessionAndUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchUserOrganization(session.user.id);
-        } else {
-          setOrganization(null);
-        }
-      })();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchUserOrganization = async (userId: string) => {
-    const { data, error } = await supabase
+    // First, get the user's active organization ID from org_members
+    const { data: memberData, error: memberError } = await supabase
       .from('org_members')
-      .select('*, organisations(id, name)')
+      .select('org_id')
       .eq('user_id', userId)
       .eq('status', 'active')
       .single();
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
-      console.error('Error fetching user organization:', error.message);
+    if (memberError && memberError.code !== 'PGRST116') {
+      console.error('Error fetching organization member:', memberError.message);
       setOrganization(null);
-    } else if (data && data.organisations) {
-      setOrganization({ id: data.organisations.id, name: data.organisations.name });
+      return;
+    }
+
+    if (!memberData) {
+      setOrganization(null);
+      return;
+    }
+
+    // Next, fetch the organization details using the org_id
+    const { data: orgData, error: orgError } = await supabase
+      .from('organisations')
+      .select('id, name')
+      .eq('id', memberData.org_id)
+      .single();
+
+    if (orgError) {
+      console.error('Error fetching organization details:', orgError.message);
+      setOrganization(null);
+      return;
+    }
+
+    if (orgData) {
+      setOrganization(orgData);
     } else {
       setOrganization(null);
     }
   };
 
   const signUp = async (email: string, password: string) => {
-    try {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) return { error };
-      // No org is set upon signup, onboarding will handle it
-      return { error: null };
-    } catch (error) {
-      return { error: error as Error };
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      toast.error(error.message);
+      return { error };
     }
+    toast.success('Verification email sent! Please check your inbox.');
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return { error };
-      if (data.user) {
-        await fetchUserOrganization(data.user.id);
-      }
-      return { error: null };
-    } catch (error) {
-      return { error: error as Error };
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      toast.error(error.message);
+      return { error };
     }
+    return { error: null };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setOrganization(null);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const value = {
+    user,
+    session,
+    loading,
+    organization,
+    setOrganization,
+    signUp,
+    signIn,
+    signOut,
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, organization, setOrganization, signUp, signIn, signOut }}>
-      {children}
+    <AuthContext.Provider value={value}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 }

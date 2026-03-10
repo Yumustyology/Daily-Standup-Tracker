@@ -6,8 +6,9 @@ import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import NewStandup from './pages/NewStandup';
 import History from './pages/History';
-import Onboarding from './pages/Onboarding'; // Import Onboarding
-import Team from './pages/Team'; // Import Team
+import Onboarding from './pages/Onboarding';
+import Team from './pages/Team';
+import AuthCallback from './pages/AuthCallback';
 
 function AppRoutes() {
   const { user, loading, organization } = useAuth();
@@ -22,7 +23,9 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Auth />} />
+      <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <Auth />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Navigate to="/auth" replace />} />
 
       {/* Onboarding Route: Only accessible if user is logged in but has no organization */}
       <Route

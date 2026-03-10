@@ -6,9 +6,11 @@ import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import NewStandup from './pages/NewStandup';
 import History from './pages/History';
+import Onboarding from './pages/Onboarding'; // Import Onboarding
+import Team from './pages/Team'; // Import Team
 
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { user, loading, organization } = useAuth();
 
   if (loading) {
     return (
@@ -21,6 +23,18 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Auth />} />
+
+      {/* Onboarding Route: Only accessible if user is logged in but has no organization */}
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            {user && !organization ? <Onboarding /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Protected Routes that require an organization */}
       <Route
         path="/dashboard"
         element={
@@ -51,6 +65,17 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/team"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Team />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

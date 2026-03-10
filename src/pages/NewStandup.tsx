@@ -3,15 +3,15 @@ import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, CheckCircle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 export default function NewStandup() {
-  const { user } = useAuth();
+  const { user, organization } = useAuth();
   const navigate = useNavigate();
   const [yesterday, setYesterday] = useState('');
   const [today, setToday] = useState('');
   const [blockers, setBlockers] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const formatDate = () => {
     return new Date().toLocaleDateString('en-US', {
@@ -24,14 +24,27 @@ export default function NewStandup() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
+
+    if (!user) {
+      toast.error('You must be logged in to submit a standup.');
+      setLoading(false);
+      return;
+    }
+
+    if (!organization) {
+      toast.error('You must be part of an organization to submit a standup. Redirecting to onboarding...');
+      setLoading(false);
+      navigate('/onboarding');
+      return;
+    }
 
     try {
       const { error: submitError } = await supabase
         .from('standups')
         .insert({
-          user_id: user?.id,
+          user_id: user.id,
+          org_id: organization.id, // Include org_id
           yesterday: yesterday.trim(),
           today: today.trim(),
           blockers: blockers.trim(),
@@ -40,9 +53,10 @@ export default function NewStandup() {
 
       if (submitError) throw submitError;
 
+      toast.success('Standup saved successfully!');
       navigate('/history');
-    } catch (err) {
-      setError('Failed to save standup. Please try again.');
+    } catch (err: any) {
+      toast.error(`Failed to save standup: ${err.message || 'Please try again.'}`);
       console.error('Error submitting standup:', err);
     } finally {
       setLoading(false);
@@ -105,16 +119,10 @@ export default function NewStandup() {
             />
           </div>
 
-          {error && (
-            <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
-              {error}
-            </div>
-          )}
-
           <div className="flex gap-4">
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !organization}
               className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle className="w-5 h-5" />

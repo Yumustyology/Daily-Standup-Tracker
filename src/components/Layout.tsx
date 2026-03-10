@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
-import { Coffee, LayoutDashboard, PlusCircle, History, LogOut } from 'lucide-react';
+import { Coffee, LayoutDashboard, PlusCircle, History, Users, LogOut } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -20,6 +20,7 @@ export default function Layout({ children }: LayoutProps) {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/new-standup', icon: PlusCircle, label: 'New Standup' },
     { to: '/history', icon: History, label: 'History' },
+    { to: '/team', icon: Users, label: 'Team' }, // Added Team link
   ];
 
   return (

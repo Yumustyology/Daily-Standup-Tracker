@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Calendar, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 
 interface Standup {
   id: string;
@@ -13,28 +15,38 @@ interface Standup {
 }
 
 export default function History() {
-  const { user } = useAuth();
+  const { user, organization } = useAuth();
+  const navigate = useNavigate();
   const [standups, setStandups] = useState<Standup[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadStandups();
-  }, [user]);
+    if (user && organization) {
+      loadStandups();
+    } else if (user && !organization && !loading) {
+      // If user exists but no organization, redirect to onboarding
+      navigate('/onboarding');
+    }
+  }, [user, organization, navigate, loading]);
 
   const loadStandups = async () => {
-    if (!user) return;
+    if (!user || !organization?.id) {
+      setLoading(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase
         .from('standups')
         .select('*')
         .eq('user_id', user.id)
+        .eq('org_id', organization.id) // Filter by organization ID
         .order('standup_date', { ascending: false });
 
       if (error) throw error;
       setStandups(data || []);
-    } catch (error) {
-      console.error('Error loading standups:', error);
+    } catch (error: any) {
+      toast.error(`Error loading standups: ${error.message}`);
     } finally {
       setLoading(false);
     }

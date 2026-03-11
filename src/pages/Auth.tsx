@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
-import { Coffee } from 'lucide-react';
+import { Coffee, Eye, EyeOff, Mail } from 'lucide-react';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithProvider } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,16 +56,25 @@ export default function Auth() {
               <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-2 bg-[#0f0f0f] border border-[#1f1f1f] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-2 bg-[#0f0f0f] border border-[#1f1f1f] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 pr-10"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-white"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
 
             <button
@@ -75,6 +85,25 @@ export default function Auth() {
               {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Sign Up'}
             </button>
           </form>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-600"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-[#111111] px-2 text-gray-400">Or continue with</span>
+            </div>
+          </div>
+
+          <div>
+            <button
+              onClick={() => signInWithProvider('google')}
+              className="w-full flex items-center justify-center gap-2 bg-[#1f1f1f] hover:bg-[#2a2a2a] text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+            >
+              <Mail className="w-5 h-5" />
+              Sign in with Email
+            </button>
+          </div>
 
           <div className="mt-6 text-center">
             <button

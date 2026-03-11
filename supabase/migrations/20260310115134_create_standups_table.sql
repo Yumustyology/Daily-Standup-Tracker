@@ -5,6 +5,7 @@
     - `standups`
       - `id` (uuid, primary key) - Unique identifier for each standup entry
       - `user_id` (uuid, foreign key) - References auth.users, the user who created the standup
+      - `org_id` (uuid, foreign key) - References organisations, the organisation the standup belongs to
       - `yesterday` (text) - What the user did yesterday
       - `today` (text) - What the user is doing today
       - `blockers` (text) - Any blockers the user is facing
@@ -28,6 +29,7 @@
 CREATE TABLE IF NOT EXISTS standups (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  org_id uuid REFERENCES organisations(id) ON DELETE CASCADE,
   yesterday text NOT NULL DEFAULT '',
   today text NOT NULL DEFAULT '',
   blockers text NOT NULL DEFAULT '',
@@ -64,5 +66,6 @@ CREATE POLICY "Users can delete own standups"
   USING (auth.uid() = user_id);
 
 CREATE INDEX IF NOT EXISTS standups_user_id_idx ON standups(user_id);
+CREATE INDEX IF NOT EXISTS standups_org_id_idx ON standups(org_id);
 CREATE INDEX IF NOT EXISTS standups_standup_date_idx ON standups(standup_date);
 CREATE INDEX IF NOT EXISTS standups_created_at_idx ON standups(created_at DESC);

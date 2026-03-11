@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Resend } from 'npm:resend';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,31 +15,90 @@ async function checkExisting(supabaseAdmin: SupabaseClient, orgId: string, email
     .in('status', ['active', 'pending'])
     .single();
 
+  // PGRST116 = no rows found, which is fine
   if (error && error.code !== 'PGRST116') {
     throw new Error(`Supabase error: ${error.message}`);
   }
   return data;
 }
 
+// Send email via Brevo REST API (no package needed — pure fetch)
+async function sendBrevoEmail({
+  to,
+  subject,
+  html,
+  inviterEmail,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+  inviterEmail: string;
+}) {
+  const apiKey = Deno.env.get('BREVO_API_KEY');
+  if (!apiKey) throw new Error('BREVO_API_KEY is not set');
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: {
+        name: 'StandupLog',
+        email: Deno.env.get('BREVO_SENDER_EMAIL') || inviterEmail,
+      },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Brevo API error ${response.status}: ${errorBody}`);
+  }
+
+  return await response.json();
+}
+
 serve(async (req: any) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { orgId, orgName, email, inviterEmail } = await req.json();
+    const body = await req.json();
 
-    // Validate input — removed inviterId, not needed
+    // Accept both "email" and "inviteeEmail" field names
+    const orgId = body.orgId;
+    const orgName = body.orgName;
+    const email = body.email || body.inviteeEmail;
+    const inviterEmail = body.inviterEmail;
+
+    // Validate all required fields
     if (!orgId || !orgName || !email || !inviterEmail) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Missing required fields.' }),
+        JSON.stringify({
+          success: false,
+          error: `Missing required fields. Received: ${JSON.stringify({ orgId, orgName, email, inviterEmail })}`,
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
+    // Service role client — bypasses JWT entirely
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
     );
 
     // Check if already a member or already invited
@@ -55,61 +113,57 @@ serve(async (req: any) => {
       );
     }
 
-    // FIX: correct Resend setup matching your working config
-    const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
-
     const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173';
 
-    const { error: emailError } = await resend.emails.send({
-      from: 'onboarding@resend.dev',
-      to: email,
-      subject: `You have been invited to join ${orgName} on StandupLog`,
-      html: `
-        <div style="font-family: Arial, sans-serif; background-color: #0f0f0f; color: #a3a3a3; padding: 40px; text-align: center;">
-          <div style="max-width: 600px; margin: auto; background-color: #1a1a1a; border-radius: 8px; overflow: hidden; border: 1px solid #1f1f1f;">
-            <div style="padding: 40px;">
-              <h1 style="color: #f59e0b; font-size: 24px; font-weight: bold; margin: 0 0 20px;">StandupLog</h1>
-              <h2 style="color: #ffffff; font-size: 28px; margin: 0 0 20px;">You're invited!</h2>
-              <p style="font-size: 16px; line-height: 1.5; margin: 0 0 30px;">
-                <strong style="color: #ffffff;">${inviterEmail}</strong> has invited you to join 
-                <strong style="color: #ffffff;">${orgName}</strong> on StandupLog — 
-                the daily standup tracker for remote teams.
-              </p>
-              <a 
-                href="${appUrl}" 
-                style="background-color: #f59e0b; color: #1a1a1a; text-decoration: none; padding: 15px 30px; border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;"
-              >
-                Accept Invite & Join ${orgName}
-              </a>
-            </div>
-            <div style="background-color: #111111; padding: 20px; text-align: center;">
-              <p style="font-size: 12px; color: #525252; margin: 0;">
-                If you weren't expecting this invite, you can ignore this email.
-              </p>
-            </div>
+    // Email HTML template — same design as before
+    const html = `
+      <div style="font-family: Arial, sans-serif; background-color: #0f0f0f; color: #a3a3a3; padding: 40px; text-align: center;">
+        <div style="max-width: 600px; margin: auto; background-color: #1a1a1a; border-radius: 8px; overflow: hidden; border: 1px solid #1f1f1f;">
+          <div style="padding: 40px;">
+            <h1 style="color: #f59e0b; font-size: 24px; font-weight: bold; margin: 0 0 20px;">StandupLog</h1>
+            <h2 style="color: #ffffff; font-size: 28px; margin: 0 0 20px;">You're invited!</h2>
+            <p style="font-size: 16px; line-height: 1.5; margin: 0 0 30px;">
+              <strong style="color: #ffffff;">${inviterEmail}</strong> has invited you to join
+              <strong style="color: #ffffff;">${orgName}</strong> on StandupLog —
+              the daily standup tracker for remote teams.
+            </p>
+            <a
+              href="${appUrl}"
+              style="background-color: #f59e0b; color: #1a1a1a; text-decoration: none; padding: 15px 30px; border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;"
+            >
+              Accept Invite &amp; Join ${orgName}
+            </a>
+          </div>
+          <div style="background-color: #111111; padding: 20px; text-align: center;">
+            <p style="font-size: 12px; color: #525252; margin: 0;">
+              If you weren't expecting this invite, you can ignore this email.
+            </p>
           </div>
         </div>
-      `,
+      </div>
+    `;
+
+    // Send email via Brevo
+    await sendBrevoEmail({
+      to: email,
+      subject: `You have been invited to join ${orgName} on StandupLog`,
+      html,
+      inviterEmail,
     });
 
-    if (emailError) {
-      console.error('Resend error:', emailError);
-      throw new Error('Failed to send invitation email.');
-    }
-
-    // FIX: user_id must be NULL for pending invites — not the inviter's ID
+    // Insert pending invite — user_id is null until they accept
     const { error: insertError } = await supabaseAdmin
       .from('org_members')
       .insert({
         org_id: orgId,
         invited_email: email,
         status: 'pending',
-        user_id: null, // will be set to the real user's ID when they accept
+        user_id: null,
       });
 
     if (insertError) {
       console.error('Insert error:', insertError);
-      throw new Error('Failed to record invitation in the database.');
+      throw new Error(`Failed to record invitation: ${insertError.message}`);
     }
 
     return new Response(
@@ -118,6 +172,7 @@ serve(async (req: any) => {
     );
 
   } catch (error: any) {
+    console.error('Edge function error:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

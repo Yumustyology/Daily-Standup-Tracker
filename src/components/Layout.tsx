@@ -1,76 +1,45 @@
 import { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
-import { Coffee, LayoutDashboard, PlusCircle, History, Users, LogOut } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Clock, Settings } from 'lucide-react';
+import TeamSwitcher from './TeamSwitcher';
 
-interface LayoutProps {
-  children: ReactNode;
-}
-
-export default function Layout({ children }: LayoutProps) {
-  const { signOut } = useAuth();
+const Layout = ({ children }: { children: ReactNode }) => {
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
-  const handleSignOut = async () => {
+  const handleLogout = async () => {
     await signOut();
-    navigate('/');
+    navigate('/auth');
   };
 
-  const navItems = [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/new-standup', icon: PlusCircle, label: 'New Standup' },
-    { to: '/history', icon: History, label: 'History' },
-    { to: '/team', icon: Users, label: 'Team' }, // Added Team link
-  ];
-
   return (
-    <div className="min-h-screen bg-[#0f0f0f] flex">
-      <aside className="w-64 bg-[#111111] border-r border-[#1f1f1f] flex flex-col">
-        <div className="p-6 border-b border-[#1f1f1f]">
-          <div className="flex items-center gap-2">
-            <Coffee className="w-6 h-6 text-amber-500" />
-            <span className="text-xl font-semibold text-white">StandupLog</span>
-          </div>
+    <div className="flex h-screen bg-[#0f0f0f]">
+      <aside className="w-64 bg-[#111111] text-white p-4 border-r border-[#1f1f1f] flex flex-col">
+        <div className="mb-8">
+          <TeamSwitcher />
         </div>
-
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {navItems.map((item) => (
-              <li key={item.to}>
-                <NavLink
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-amber-500 text-gray-900 font-semibold'
-                        : 'text-gray-300 hover:bg-[#1f1f1f] hover:text-white'
-                    }`
-                  }
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </NavLink>
-              </li>
-            ))}
+        <nav className="flex-grow">
+          <ul>
+            <li><NavLink to="/dashboard" className={({isActive}) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-amber-500 text-black' : 'hover:bg-[#1f1f1f]'}`}><LayoutDashboard size={20}/>Dashboard</NavLink></li>
+            <li><NavLink to="/new-standup" className={({isActive}) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-amber-500 text-black' : 'hover:bg-[#1f1f1f]'}`}><Clock size={20}/>New Standup</NavLink></li>
+            <li><NavLink to="/history" className={({isActive}) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-amber-500 text-black' : 'hover:bg-[#1f1f1f]'}`}><Users size={20}/>History</NavLink></li>
+            <li><NavLink to="/team" className={({isActive}) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-amber-500 text-black' : 'hover:bg-[#1f1f1f]'}`}><Users size={20}/>Team</NavLink></li>
           </ul>
         </nav>
-
-        <div className="p-4 border-t border-[#1f1f1f]">
-          <button
-            onClick={handleSignOut}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-[#1f1f1f] hover:text-white transition-colors w-full"
-          >
-            <LogOut className="w-5 h-5" />
-            <span>Logout</span>
+        <div>
+          <div className="text-sm text-gray-400 mb-2">{user?.email}</div>
+          <button onClick={handleLogout} className="flex items-center w-full gap-3 px-3 py-2 rounded-md text-sm font-medium hover:bg-[#1f1f1f]">
+            <LogOut size={20} />
+            Logout
           </button>
         </div>
       </aside>
-
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-6xl mx-auto p-8">
-          {children}
-        </div>
+      <main className="flex-1 p-8 overflow-y-auto">
+        {children}
       </main>
     </div>
   );
-}
+};
+
+export default Layout;

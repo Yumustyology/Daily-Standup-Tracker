@@ -14,22 +14,30 @@ export default function Dashboard() {
   const [totalTeamMembers, setTotalTeamMembers] = useState<number>(0);
   const [streak, setStreak] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && organization) {
       loadStats();
-    } else if (user && !organization && !loading) {
+    } else if (user && !organization) {
       // If user exists but no organization, redirect to onboarding
       navigate('/onboarding');
     }
-  }, [user, organization, navigate, loading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, organization, navigate]);
 
   const loadStats = async () => {
     setLoading(true);
+    setError(null);
     if (!user || !organization?.id) {
       setLoading(false);
       return;
     }
+
+    const timeout = setTimeout(() => {
+      setError('Having trouble loading your dashboard? Please try again later.');
+      setLoading(false);
+    }, 10000);
 
     try {
       // Fetch total individual standups
@@ -105,8 +113,10 @@ export default function Dashboard() {
       setStreak(currentStreak);
 
     } catch (error: any) {
+      setError(error.message);
       toast.error(`Error loading stats: ${error.message}`);
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   };
@@ -124,6 +134,20 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
         <p>Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#0f0f0f] text-white flex flex-col items-center justify-center">
+        <p className="mb-4">{error}</p>
+        <button
+          onClick={loadStats}
+          className="bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold py-2 px-4 rounded-lg transition-colors"
+        >
+          Try Again
+        </button>
       </div>
     );
   }

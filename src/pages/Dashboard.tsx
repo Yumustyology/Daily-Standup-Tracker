@@ -103,6 +103,19 @@ export default function Dashboard() {
           profilesMap = new Map(profilesData.map((p) => [p.id, p.email]));
         }
       }
+      
+    const { data: orgMembers, error: orgMembersError } = await supabase
+    .from('org_members')
+    .select('user_id, invited_email')
+    .eq('org_id', organization.id);
+
+    let invitedEmailsMap = new Map();
+    if (orgMembersError) {
+        console.error('Error fetching org members:', orgMembersError);
+    } else {
+        invitedEmailsMap = new Map(orgMembers.map(m => [m.user_id, m.invited_email]));
+    }
+
 
       const enrichedStandups: Standup[] = teamStandupsData.map((standup) => ({
         id: standup.id,
@@ -112,7 +125,7 @@ export default function Dashboard() {
         standup_date: standup.standup_date,
         profiles: {
           id: standup.user_id,
-          email: profilesMap.get(standup.user_id) || 'Email not found',
+          email: profilesMap.get(standup.user_id) || invitedEmailsMap.get(standup.user_id) || 'Email not found',
         },
       }));
 

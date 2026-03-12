@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, TrendingUp, PlusCircle, Users, Flame, LucideIcon } from 'lucide-react';
+import { Calendar, TrendingUp, PlusCircle, Users, Flame, LucideIcon, CheckCircle, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 
@@ -248,6 +248,15 @@ export default function Dashboard() {
           >
             Try Again
           </button>
+        </div>
+      )}
+
+      {!loading && (
+        <div className={`p-4 rounded-lg mb-6 flex items-center gap-3 ${submittedToday ? 'bg-green-900/20 border border-green-500/30 text-green-300' : 'bg-amber-900/20 border border-amber-500/30 text-amber-300'}`}>
+            {submittedToday ? <CheckCircle size={20} /> : <XCircle size={20} />}
+            <p className="font-medium">
+                {submittedToday ? "You've submitted your standup for today. Great job!" : "You have not submitted your standup for today."}
+            </p>
         </div>
       )}
 

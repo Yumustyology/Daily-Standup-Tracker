@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +12,11 @@ export default function NewStandup() {
   const [today, setToday] = useState('');
   const [blockers, setBlockers] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasSubmittedToday, setHasSubmittedToday] = useState(false);
+
+  const getCurrentDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
 
   const formatDate = () => {
     return new Date().toLocaleDateString('en-US', {
@@ -22,46 +27,73 @@ export default function NewStandup() {
     });
   };
 
+  useEffect(() => {
+    const checkExistingStandup = async () => {
+      if (user?.id && organization?.id) {
+        setLoading(true);
+        try {
+          const { data, error } = await supabase
+            .from('standups')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('org_id', organization.id)
+            .eq('standup_date', getCurrentDate());
+
+          if (error) throw error;
+
+          if (data && data.length > 0) {
+            setHasSubmittedToday(true);
+            toast('You have already submitted a standup for today.');
+          }
+        } catch (err: any) {
+          console.error('Error checking for existing standup:', err);
+          toast.error('Failed to check for existing standup.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    checkExistingStandup();
+  }, [user, organization]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasSubmittedToday || !user || !organization) {
+      toast.error(hasSubmittedToday ? 'You have already submitted a standup for today.' : 'User or organization not found.');
+      return;
+    }
+
     setLoading(true);
 
-    if (!user) {
-      toast.error('You must be logged in to submit a standup.');
-      setLoading(false);
-      return;
-    }
-
-    if (!organization) {
-      toast.error('You must be part of an organization to submit a standup. Redirecting to onboarding...');
-      setLoading(false);
-      navigate('/onboarding');
-      return;
-    }
-
     try {
-      const { error: submitError } = await supabase
-        .from('standups')
-        .insert({
-          user_id: user.id,
-          org_id: organization.id, // Include org_id
-          yesterday: yesterday.trim(),
-          today: today.trim(),
-          blockers: blockers.trim(),
-          standup_date: new Date().toISOString().split('T')[0],
-        });
+      const standupData = {
+        user_id: user.id,
+        org_id: organization.id,
+        yesterday: yesterday.trim(),
+        today: today.trim(),
+        blockers: blockers.trim(),
+        standup_date: getCurrentDate(),
+      };
 
-      if (submitError) throw submitError;
+      const { error: submitError } = await supabase.from('standups').insert(standupData);
+      if (submitError) throw new Error(`Failed to save standup: ${submitError.message}`);
+
+      // Manually trigger the database function to update user stats
+      // const { error: userStatsError } = await supabase.rpc('update_user_standup_stats', { p_user_id: user.id, p_org_id: organization.id });
+      // if (userStatsError) throw new Error(`Failed to update user stats: ${userStatsError.message}`);
 
       toast.success('Standup saved successfully!');
       navigate('/history');
+
     } catch (err: any) {
-      toast.error(`Failed to save standup: ${err.message || 'Please try again.'}`);
+      toast.error(err.message || 'An unexpected error occurred.');
       console.error('Error submitting standup:', err);
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div>
@@ -122,11 +154,11 @@ export default function NewStandup() {
           <div className="flex gap-4">
             <button
               type="submit"
-              disabled={loading || !organization}
+              disabled={loading || !organization || hasSubmittedToday}
               className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle className="w-5 h-5" />
-              {loading ? 'Saving...' : 'Save Standup'}
+              {loading ? 'Saving...' : hasSubmittedToday ? 'Submitted Today' : 'Save Standup'}
             </button>
             <button
               type="button"

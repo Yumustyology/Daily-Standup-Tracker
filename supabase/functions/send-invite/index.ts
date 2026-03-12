@@ -64,7 +64,6 @@ async function sendBrevoEmail({
 }
 
 serve(async (req: any) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -72,13 +71,11 @@ serve(async (req: any) => {
   try {
     const body = await req.json();
 
-    // Accept both "email" and "inviteeEmail" field names
     const orgId = body.orgId;
     const orgName = body.orgName;
     const email = body.email || body.inviteeEmail;
     const inviterEmail = body.inviterEmail;
 
-    // Validate all required fields
     if (!orgId || !orgName || !email || !inviterEmail) {
       return new Response(
         JSON.stringify({
@@ -89,17 +86,46 @@ serve(async (req: any) => {
       );
     }
 
-    // Service role client — bypasses JWT entirely
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
+
+    // ✅ Auth check — must come after supabaseAdmin is created and orgId is parsed
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      });
+    }
+    const [bearer, token] = authHeader.split(' ');
+    if (bearer !== 'Bearer' || !token) {
+      return new Response(JSON.stringify({ error: 'Invalid authorization header' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      });
+    }
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      });
+    }
+    const { data: member, error: memberError } = await supabaseAdmin
+      .from('org_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('org_id', orgId)
+      .single();
+    if (memberError || !member || member.role !== 'admin') {
+      return new Response(JSON.stringify({ error: 'Only admins can send invites.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 403,
+      });
+    }
 
     // Check if already a member or already invited
     const existing = await checkExisting(supabaseAdmin, orgId, email);
@@ -115,8 +141,7 @@ serve(async (req: any) => {
 
     const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173';
 
-    // Email HTML template — same design as before
-    const html = `
+   const html = `
       <div style="font-family: Arial, sans-serif; background-color: #0f0f0f; color: #a3a3a3; padding: 40px; text-align: center;">
         <div style="max-width: 600px; margin: auto; background-color: #1a1a1a; border-radius: 8px; overflow: hidden; border: 1px solid #1f1f1f;">
           <div style="padding: 40px;">
@@ -143,7 +168,6 @@ serve(async (req: any) => {
       </div>
     `;
 
-    // Send email via Brevo
     await sendBrevoEmail({
       to: email,
       subject: `You have been invited to join ${orgName} on StandupLog`,
@@ -151,18 +175,11 @@ serve(async (req: any) => {
       inviterEmail,
     });
 
-    // Insert pending invite — user_id is null until they accept
     const { error: insertError } = await supabaseAdmin
       .from('org_members')
-      .insert({
-        org_id: orgId,
-        invited_email: email,
-        status: 'pending',
-        user_id: null,
-      });
+      .insert({ org_id: orgId, invited_email: email, status: 'pending', user_id: null });
 
     if (insertError) {
-      console.error('Insert error:', insertError);
       throw new Error(`Failed to record invitation: ${insertError.message}`);
     }
 

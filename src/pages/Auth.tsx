@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { Coffee, Eye, EyeOff, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -9,14 +10,18 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, signInWithProvider } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     const action = isLogin ? signIn : signUp;
-    await action(email, password);
+    const { error } = await action(email, password);
 
+    if (!error) {
+      navigate('/dashboard');
+    }
     setLoading(false);
   };
 

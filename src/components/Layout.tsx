@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
-import { LogOut, LayoutDashboard, Users, Clock, Settings } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Clock } from 'lucide-react';
 import TeamSwitcher from './TeamSwitcher';
 
 const Layout = ({ children }: { children: ReactNode }) => {

@@ -14,7 +14,9 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   organization: Organisation | null;
+  userRole: string | null;
   userOrgs: Organisation[];
+  pendingInvites: any[];
   setOrganization: (org: Organisation | null) => void;
   setActiveOrg: (org: Organisation) => void;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -31,86 +33,119 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [organization, setOrganization] = useState<Organisation | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [userOrgs, setUserOrgs] = useState<Organisation[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
+
+
+  const isMounted = useRef(true);
   const isCreatingOrg = useRef(false);
 
-  useEffect(() => {
-    const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-
-      if (currentUser) {
-        await fetchUserOrgs(currentUser);
-      }
-      setLoading(false);
-    };
-
-    fetchSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setLoading(true);
-      setSession(session);
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-
-      if (currentUser) {
-        await fetchUserOrgs(currentUser);
-      } else {
-        setOrganization(null);
-        setUserOrgs([]);
-      }
-
-      if (event === 'SIGNED_IN') {
-        toast.success('Successfully signed in!');
-      } else if (event === 'SIGNED_OUT') {
-        setOrganization(null);
-        setUserOrgs([]);
-        toast.success('Successfully signed out!');
-      } else if (event === 'USER_UPDATED') {
-        toast.success('Email verified successfully!');
-      }
-
-      setLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // --- FETCH USER ORGANISATIONS ---
   const fetchUserOrgs = async (currentUser: User) => {
-    const { data: orgMembers, error } = await supabase
+    if (!currentUser.id) return;
+
+    const { data: memberData, error: memberError } = await supabase
       .from('org_members')
-      .select('*, organisations (*)')
+      .select('org_id, status, role') // Fetched role
       .eq('user_id', currentUser.id)
       .eq('status', 'active');
 
-    if (error) {
-      console.error('Error fetching user organisations:', error.message);
+    if (memberError) {
+      console.error('org_members query failed:', memberError);
       return;
     }
 
-    if (orgMembers && orgMembers.length > 0) {
-      const orgs = orgMembers.map(m => m.organisations).filter(Boolean) as Organisation[];
-      setUserOrgs(orgs);
-      if (!organization || !orgs.find(o => o.id === organization.id)) {
-        setOrganization(orgs[0]);
+    if (!memberData || memberData.length === 0) {
+      if (isMounted.current) {
+        setOrganization(null);
+        setUserOrgs([]);
+        setUserRole(null);
       }
+      return;
+    }
+
+    const orgIds = memberData.map(m => m.org_id);
+    const { data: orgData, error: orgError } = await supabase
+      .from('organisations')
+      .select('id, name, created_by')
+      .in('id', orgIds);
+
+    if (orgError) {
+      console.error('organisations query failed:', orgError);
+      return;
+    }
+
+    if (!isMounted.current) return;
+
+    const activeOrgs = (orgData ?? []) as Organisation[];
+    setUserOrgs(activeOrgs);
+
+    const currentOrg = organization || activeOrgs[0] || null;
+    setOrganization(currentOrg);
+
+    if (currentOrg) {
+      const currentMemberInfo = memberData.find(m => m.org_id === currentOrg.id);
+      setUserRole(currentMemberInfo?.role || null);
     }
   };
 
+  const setActiveOrg = (org: Organisation) => {
+    setOrganization(org);
+    // You might need to refetch the role or have it stored to set it directly
+    // For now, let's refetch user orgs to simplify state management
+    if (user) {
+      fetchUserOrgs(user);
+    }
+  };
+  
+  // --- INIT AUTH ---
+  useEffect(() => {
+    isMounted.current = true;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, newSession) => {
+        const currentUser = newSession?.user ?? null;
+
+        if (isMounted.current) {
+          setSession(newSession);
+          setUser(currentUser);
+        }
+        setTimeout(async () => {
+          try {
+            if (currentUser) {
+              await fetchUserOrgs(currentUser);
+            } else {
+              if (isMounted.current) {
+                setOrganization(null);
+                setUserOrgs([]);
+                setPendingInvites([]);
+              }
+            }
+          } catch (err) {
+            console.error('fetchUserOrgs failed:', err);
+          } finally {
+            setLoading(false);
+          }
+        }, 0);
+      }
+    );
+
+    return () => {
+      isMounted.current = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // --- CREATE ORGANISATION ---
   const createOrganization = async (name: string) => {
     if (!user) {
-        const error = new Error("User not authenticated");
-        toast.error(error.message);
-        return { error };
+      const error = new Error('User not authenticated');
+      toast.error(error.message);
+      return { error };
     }
     if (isCreatingOrg.current) {
-        const error = new Error("Organization creation already in progress.");
-        return { error };
+      return { error: new Error('Organization creation already in progress') };
     }
 
     try {
@@ -123,44 +158,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (orgError) {
-        toast.error('Failed to create your workspace. Please try again.');
-        console.error('Error creating workspace:', orgError.message);
+        toast.error('Failed to create workspace');
         return { error: orgError };
       }
-
+      
+      // When creating an org, the creator should be an admin.
       const { error: memberError } = await supabase
         .from('org_members')
         .insert({
           org_id: newOrg.id,
           user_id: user.id,
           status: 'active',
+          role: 'admin', // Assign admin role to creator
           invited_email: user.email!,
           joined_at: new Date().toISOString(),
         });
 
       if (memberError) {
-        toast.error('Failed to add you to your new workspace. Please try again.');
-        console.error('Error adding member to workspace:', memberError.message);
+        toast.error('Failed to add member to workspace');
         return { error: memberError };
       }
-      
-      const newOrgTyped = newOrg as Organisation;
-      setUserOrgs(prevOrgs => [...prevOrgs, newOrgTyped]);
-      setOrganization(newOrgTyped);
-      toast.success('Successfully created your workspace!');
-      return { error: null };
 
+      const orgTyped = newOrg as Organisation;
+      setUserOrgs(prev => [...prev, orgTyped]);
+      setOrganization(orgTyped);
+      setUserRole('admin'); // Set role in context
+      toast.success('Workspace created successfully');
+
+      return { error: null };
     } catch (error: any) {
-        toast.error(error.message);
-        return { error };
+      toast.error(error.message);
+      return { error };
     } finally {
       isCreatingOrg.current = false;
     }
-  };
-
-
-  const setActiveOrg = (org: Organisation) => {
-    setOrganization(org);
   };
 
   const signUp = async (email: string, password: string) => {
@@ -169,18 +200,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.error(error.message);
       return { error };
     }
-    toast.success('Verification email sent! Please check your inbox.');
+    toast.success('Verification email sent');
     return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      if (error.message === 'Invalid login credentials') {
-        toast.error('Invalid email or password. Please try again.');
-      } else {
-        toast.error(error.message);
-      }
+      toast.error(error.message);
       return { error };
     }
     return { error: null };
@@ -188,15 +215,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithProvider = async (provider: Provider) => {
     const { error } = await supabase.auth.signInWithOAuth({ provider });
-    if (error) {
-      toast.error(error.message);
-    }
+    if (error) toast.error(error.message);
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast.error(error.message);
+    await supabase.auth.signOut();
+    if (isMounted.current) {
+        setUser(null);
+        setSession(null);
+        setOrganization(null);
+        setUserOrgs([]);
+        setPendingInvites([]);
+        setUserRole(null);
     }
   };
 
@@ -205,7 +235,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     organization,
+    userRole,
     userOrgs,
+    pendingInvites,
     setOrganization,
     setActiveOrg,
     signUp,
@@ -215,17 +247,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     createOrganization,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 }

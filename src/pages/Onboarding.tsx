@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, Organisation } from '../lib/AuthContext';
-import { supabase } from '../lib/supabase';
 import { LogOut } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 
 interface PendingInvite {
   id: string;
@@ -14,7 +14,7 @@ interface PendingInvite {
 }
 
 const Onboarding = () => {
-  const { user, organization, setActiveOrg, createOrganization } = useAuth();
+  const { user, organization, setActiveOrg, createOrganization, signOut } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(null);
@@ -34,13 +34,12 @@ const Onboarding = () => {
         .select('id, organisations (id, name)')
         .eq('invited_email', user.email!)
         .eq('status', 'pending')
-        .limit(1)
-        .single();
+        .limit(1);
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error checking for pending invites:', error.message);
-      } else if (data) {
-        setPendingInvite(data as unknown as PendingInvite);
+      } else if (data && data.length > 0) {
+        setPendingInvite(data[0] as unknown as PendingInvite);
       }
       setLoading(false);
     };
@@ -90,7 +89,7 @@ const Onboarding = () => {
   };
   
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut(); // Use signOut from useAuth
     navigate('/auth');
   };
 

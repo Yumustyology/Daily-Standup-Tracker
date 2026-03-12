@@ -2,9 +2,32 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, TrendingUp, PlusCircle, Users, Flame } from 'lucide-react';
+import { Calendar, TrendingUp, PlusCircle, Users, Flame, CheckCircle, XCircle, LucideIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
+
+interface Standup {
+  id: string;
+  yesterday: string;
+  today: string;
+  blockers: string;
+  standup_date: string;
+}
+
+interface StatCardProps {
+    title: string;
+    value: number | null;
+    icon: LucideIcon;
+    subValue?: number | null;
+    loading: boolean;
+}
+
+interface StreakCardProps {
+    title: string;
+    value: number | null;
+    icon: LucideIcon;
+    loading: boolean;
+}
 
 export default function Dashboard() {
   const { user, organization, userOrgs, loading: authLoading } = useAuth();
@@ -15,6 +38,8 @@ export default function Dashboard() {
   const [streak, setStreak] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submittedToday, setSubmittedToday] = useState(false);
+  const [recentStandups, setRecentStandups] = useState<Standup[]>([]);
 
   const isMounted = useRef(true);
 
@@ -31,6 +56,39 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     let hasError = false;
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    // Check if standup submitted today
+    const { data: todayStandup, error: todayStandupError } = await supabase
+      .from('standups')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('org_id', organization.id)
+      .eq('standup_date', today)
+      .single();
+
+    if (todayStandupError && todayStandupError.code !== 'PGRST116') { // PGRST116: no rows found
+        console.error("Error checking for today's standup:", todayStandupError);
+        hasError = true;
+    } else if (isMounted.current) {
+        setSubmittedToday(!!todayStandup);
+    }
+
+    // Fetch recent standups
+    const { data: recentStandupsData, error: recentStandupsError } = await supabase
+      .from('standups')
+      .select('id, yesterday, today, blockers, standup_date')
+      .eq('user_id', user.id)
+      .eq('org_id', organization.id)
+      .order('standup_date', { ascending: false })
+      .limit(3);
+
+    if (recentStandupsError) {
+        console.error('Error fetching recent standups:', recentStandupsError);
+        hasError = true; // Or handle as non-critical
+    } else if (isMounted.current) {
+        setRecentStandups(recentStandupsData || []);
+    }
 
     // Fetch user stats
     const { data: userStats, error: userStatsError } = await supabase
@@ -63,7 +121,6 @@ export default function Dashboard() {
     }
 
     // Fetch team daily stats
-    const today = format(new Date(), 'yyyy-MM-dd');
     const { data: teamStats, error: teamStatsError } = await supabase
       .from('team_daily_stats')
       .select('submissions')
@@ -113,8 +170,18 @@ export default function Dashboard() {
       day: 'numeric',
     });
   };
+  
+  const formatStandupDate = (dateString: string) => {
+    // Adjust for timezone to display correct day
+    const date = new Date(dateString.replace(/-/g, '/'));
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
 
-  const StatCard = ({ title, value, icon: Icon, subValue, loading }) => {
+  const StatCard = ({ title, value, icon: Icon, subValue, loading }: StatCardProps) => {
     const displayValue = loading || value === null ? '...' : value;
     return (
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-6">
@@ -130,7 +197,7 @@ export default function Dashboard() {
     );
   }
   
-  const StreakCard = ({ title, value, icon: Icon, loading }) => {
+  const StreakCard = ({ title, value, icon: Icon, loading }: StreakCardProps) => {
     const displayValue = loading || value === null ? '...' : value;
     const label = value === 1 ? 'day' : 'days';
     return (
@@ -179,6 +246,15 @@ export default function Dashboard() {
         </div>
       )}
 
+      {!loading && (
+        <div className={`p-4 rounded-lg mb-6 flex items-center gap-3 ${submittedToday ? 'bg-green-900/20 border border-green-500/30 text-green-300' : 'bg-amber-900/20 border border-amber-500/30 text-amber-300'}`}>
+            {submittedToday ? <CheckCircle size={20} /> : <XCircle size={20} />}
+            <p className="font-medium">
+                {submittedToday ? "You've submitted your standup for today. Great job!" : "You have not submitted your standup for today."}
+            </p>
+        </div>
+      )}
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <StatCard 
@@ -201,18 +277,57 @@ export default function Dashboard() {
             loading={loading}
         />
       </div>
-
-      <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-8 text-center">
-        <h2 className="text-xl font-semibold text-white mb-3">Ready to log today's standup?</h2>
-        <p className="text-gray-400 mb-6">Keep track of your progress and stay accountable to your goals</p>
-        <button
-          onClick={() => navigate('/new-standup')}
-          className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold py-3 px-6 rounded-lg transition-colors"
-        >
-          <PlusCircle className="w-5 h-5" />
-          Log Today's Standup
-        </button>
+      
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-white mb-4">Your Recent Standups</h2>
+        {loading ? (
+            <p className="text-gray-400">Loading recent standups...</p>
+        ) : recentStandups.length > 0 ? (
+            <div className="space-y-4">
+                {recentStandups.map((standup) => (
+                    <div key={standup.id} className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-6">
+                        <p className="text-sm font-semibold text-amber-500 mb-3">{formatStandupDate(standup.standup_date)}</p>
+                        <div className="space-y-3">
+                            <div>
+                                <h4 className="text-sm font-semibold text-gray-400 mb-1">Yesterday</h4>
+                                <p className="text-white whitespace-pre-wrap">{standup.yesterday}</p>
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-semibold text-gray-400 mb-1">Today</h4>
+                                <p className="text-white whitespace-pre-wrap">{standup.today}</p>
+                            </div>
+                            {standup.blockers && (
+                                <div>
+                                    <h4 className="text-sm font-semibold text-gray-400 mb-1">Blockers</h4>
+                                    <p className="text-white whitespace-pre-wrap">{standup.blockers}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        ) : (
+             <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-12 text-center">
+                <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-white mb-2">No standups yet</h3>
+                <p className="text-gray-400">Once you log your first standup, you'll see your recent entries here.</p>
+            </div>
+        )}
       </div>
+
+      {!loading && !submittedToday && (
+        <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-8 text-center">
+            <h2 className="text-xl font-semibold text-white mb-3">Ready to log today's standup?</h2>
+            <p className="text-gray-400 mb-6">Keep track of your progress and stay accountable to your goals</p>
+            <button
+            onClick={() => navigate('/new-standup')}
+            className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold py-3 px-6 rounded-lg transition-colors"
+            >
+            <PlusCircle className="w-5 h-5" />
+            Log Today's Standup
+            </button>
+        </div>
+      )}
     </div>
   );
 }

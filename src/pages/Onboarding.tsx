@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, Organisation } from '../lib/AuthContext';
-import { supabase } from '../lib/supabase';
 import { LogOut } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 
 interface PendingInvite {
   id: string;
@@ -14,16 +14,18 @@ interface PendingInvite {
 }
 
 const Onboarding = () => {
-  const { user, organization, setActiveOrg, createOrganization } = useAuth();
+  const { user, organization, userOrgs, loading: authLoading, setActiveOrg, createOrganization, signOut } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
   const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(null);
 
   useEffect(() => {
-    if (organization) {
+    if (authLoading) return;
+    if (organization || userOrgs.length > 0) {
       navigate('/dashboard');
     }
-  }, [organization, navigate]);
+  }, [organization, userOrgs, authLoading, navigate]);
 
   useEffect(() => {
     const checkInvites = async () => {
@@ -34,18 +36,20 @@ const Onboarding = () => {
         .select('id, organisations (id, name)')
         .eq('invited_email', user.email!)
         .eq('status', 'pending')
-        .limit(1)
-        .single();
+        .limit(1);
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error checking for pending invites:', error.message);
-      } else if (data) {
-        setPendingInvite(data as unknown as PendingInvite);
+      } else if (data && data.length > 0) {
+        setPendingInvite(data[0] as unknown as PendingInvite);
       }
       setLoading(false);
     };
-    checkInvites();
-  }, [user]);
+
+    if (!authLoading) {
+        checkInvites();
+    }
+  }, [user, authLoading]);
 
   const handleJoinOrg = async () => {
     if (!user || !pendingInvite) return;
@@ -61,13 +65,9 @@ const Onboarding = () => {
     if (error) {
       toast.error('Failed to join the organization. Please try again.');
       console.error('Error joining organization:', error.message);
-      setLoading(false);
-      return;
-    }
-
-    if (updatedMember && updatedMember.organisations) {
+    } else if (updatedMember && updatedMember.organisations) {
       const org = updatedMember.organisations as Organisation;
-      setActiveOrg(org);
+      await setActiveOrg(org);
       toast.success(`Successfully joined ${org.name}!`);
       navigate('/dashboard');
     } else {
@@ -77,27 +77,27 @@ const Onboarding = () => {
   };
 
   const handleCreateOwnWorkspace = async () => {
-    if (!user) return;
-    setLoading(true);
+    if (!user || isCreating) return;
+    setIsCreating(true);
+
     const orgName = `${user.email?.split('@')[0]}'s Workspace`;
     const { error } = await createOrganization(orgName);
-    if (error) {
-      setLoading(false);
-      return;
+    if (!error) {
+        navigate('/dashboard');
+    } else {
+        setIsCreating(false);
     }
-    navigate('/dashboard');
-    setLoading(false);
   };
   
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     navigate('/auth');
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
-        <p>Checking for invites...</p>
+        <p>Loading...</p>
       </div>
     );
   }
@@ -112,16 +112,16 @@ const Onboarding = () => {
              <button
               onClick={handleJoinOrg}
               className="w-full bg-amber-500 text-black py-2 rounded-lg font-semibold hover:bg-amber-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
+              disabled={isCreating}
             >
-              {loading ? 'Joining...' : `Join ${pendingInvite.organisations.name}`}
+              {isCreating ? 'Joining...' : `Join ${pendingInvite.organisations.name}`}
             </button>
             <button
               onClick={handleCreateOwnWorkspace}
               className="w-full bg-gray-700 text-white py-2 rounded-lg font-semibold hover:bg-gray-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
+              disabled={isCreating}
             >
-              {loading ? 'Creating...' : 'Create my own workspace instead'}
+              {isCreating ? 'Creating...' : 'Create my own workspace instead'}
             </button>
            </div>
         </div>
@@ -146,15 +146,15 @@ const Onboarding = () => {
          </div>
 
          <p className="text-gray-300 mb-8 text-center">
-          Welcome! It looks like you're not part of an organization yet. Let's create one for you.
+          Welcome! Let's create a workspace to get you started.
         </p>
 
         <button
             onClick={handleCreateOwnWorkspace}
             className="w-full bg-amber-500 text-black py-2 rounded-lg font-semibold hover:bg-amber-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loading}
+            disabled={isCreating}
           >
-            {loading ? 'Creating...' : 'Create Your Workspace'}
+            {isCreating ? 'Creating...' : 'Create Your Workspace'}
           </button>
       </div>
     </div>

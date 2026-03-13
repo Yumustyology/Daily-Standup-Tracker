@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useAuth } from '../lib/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Coffee, Eye, EyeOff, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -8,17 +9,29 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp, signInWithProvider } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const action = isLogin ? signIn : signUp;
-    await action(email, password);
+    const action = isLogin ? supabase.auth.signInWithPassword : supabase.auth.signUp;
+    const { error } = await action({ email, password });
 
+    if (!error) {
+      navigate('/dashboard');
+    }
     setLoading(false);
   };
+
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+  }
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center p-4">
@@ -97,11 +110,11 @@ export default function Auth() {
 
           <div>
             <button
-              onClick={() => signInWithProvider('google')}
+              onClick={signInWithGoogle}
               className="w-full flex items-center justify-center gap-2 bg-[#1f1f1f] hover:bg-[#2a2a2a] text-white font-semibold py-2 px-4 rounded-lg transition-colors"
             >
               <Mail className="w-5 h-5" />
-              Sign in with Email
+              Sign in with Google
             </button>
           </div>
 

@@ -1,125 +1,195 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, TrendingUp, PlusCircle, Users, Flame } from 'lucide-react';
-import { format, differenceInDays, startOfDay } from 'date-fns';
+import { Calendar, TrendingUp, PlusCircle, Users, Flame, LucideIcon, CheckCircle, XCircle } from 'lucide-react';
+import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 
+interface Standup {
+  id: string;
+  yesterday: string;
+  today: string;
+  blockers: string;
+  standup_date: string;
+  profiles: {
+    id: string;
+    email: string;
+  } | null;
+}
+
+interface StatCardProps {
+    title: string;
+    value: number | null;
+    icon: LucideIcon;
+    subValue?: number | null;
+    loading: boolean;
+}
+
+interface StreakCardProps {
+    title: string;
+    value: number | null;
+    icon: LucideIcon;
+    loading: boolean;
+}
+
 export default function Dashboard() {
-  const { user, organization } = useAuth();
+  const { user, organization, userOrgs, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [totalStandups, setTotalStandups] = useState<number>(0);
-  const [teamStandupsTodayCount, setTeamStandupsTodayCount] = useState<number>(0);
-  const [totalTeamMembers, setTotalTeamMembers] = useState<number>(0);
-  const [streak, setStreak] = useState<number>(0);
+  const [totalStandups, setTotalStandups] = useState<number | null>(null);
+  const [teamStandupsTodayCount, setTeamStandupsTodayCount] = useState<number | null>(null);
+  const [totalTeamMembers, setTotalTeamMembers] = useState<number | null>(null);
+  const [streak, setStreak] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submittedToday, setSubmittedToday] = useState(false);
+  const [teamStandupsToday, setTeamStandupsToday] = useState<Standup[]>([]);
+
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    if (user && organization) {
-      loadStats();
-    } else if (user && !organization) {
-      // If user exists but no organization, redirect to onboarding
-      navigate('/onboarding');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, organization, navigate]);
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
+    if (!user || !organization) return;
+
     setLoading(true);
     setError(null);
-    if (!user || !organization?.id) {
-      setLoading(false);
-      return;
+    let hasError = false;
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    const { data: todayStandup, error: todayStandupError } = await supabase
+      .from('standups')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('org_id', organization.id)
+      .eq('standup_date', today)
+      .maybeSingle();
+
+    if (todayStandupError) {
+      console.error("Error checking for today's standup:", todayStandupError);
+      hasError = true;
+    } else if (isMounted.current) {
+      setSubmittedToday(!!todayStandup);
     }
 
-    const timeout = setTimeout(() => {
-      setError('Having trouble loading your dashboard? Please try again later.');
-      setLoading(false);
-    }, 10000);
+    const { data: teamStandupsData, error: teamStandupsError } = await supabase
+      .from('standups')
+      .select('id, yesterday, today, blockers, standup_date, user_id')
+      .eq('org_id', organization.id)
+      .eq('standup_date', today)
+      .order('created_at', { ascending: true });
 
-    try {
-      // Fetch total individual standups
-      const { count: individualCount, error: individualError } = await supabase
-        .from('standups')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('org_id', organization.id);
+    if (teamStandupsError) {
+      console.error('Error fetching team standups:', teamStandupsError);
+      hasError = true;
+    } else if (isMounted.current && teamStandupsData) {
+      const userIds = [...new Set(teamStandupsData.map((s) => s.user_id))];
+      let profilesMap = new Map();
 
-      if (individualError) throw individualError;
-      setTotalStandups(individualCount || 0);
+      if (userIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .in('id', userIds);
 
-      // Fetch team members
-      const { data: members, error: membersError } = await supabase
-        .from('org_members')
-        .select('id, user_id, status')
-        .eq('org_id', organization.id)
-        .eq('status', 'active');
-
-      if (membersError) throw membersError;
-      setTotalTeamMembers(members?.length || 0);
-
-      const activeMemberIds = members?.map(m => m.user_id).filter(Boolean) as string[] || [];
-      const today = format(new Date(), 'yyyy-MM-dd');
-
-      // Fetch team standups today
-      const { count: teamStandupsCount, error: teamStandupsError } = await supabase
-        .from('standups')
-        .select('*', { count: 'exact', head: true })
-        .eq('org_id', organization.id)
-        .eq('standup_date', today)
-        .in('user_id', activeMemberIds);
-
-      if (teamStandupsError) throw teamStandupsError;
-      setTeamStandupsTodayCount(teamStandupsCount || 0);
-
-      // Calculate streak
-      const { data: userStandups, error: userStandupsError } = await supabase
-        .from('standups')
-        .select('standup_date')
-        .eq('user_id', user.id)
-        .eq('org_id', organization.id)
-        .order('standup_date', { ascending: false });
-      
-      if (userStandupsError) throw userStandupsError;
-
-      let currentStreak = 0;
-      if (userStandups && userStandups.length > 0) {
-        let previousDate: Date | null = null;
-        const todayDate = startOfDay(new Date());
-
-        for (let i = 0; i < userStandups.length; i++) {
-          const standup = userStandups[i];
-          const standupDate = startOfDay(new Date(standup.standup_date));
-          
-          if (i === 0) {
-            // If the most recent standup is today or yesterday
-            if (differenceInDays(todayDate, standupDate) <= 1) {
-              currentStreak = 1;
-            } else {
-              break; // No streak
-            }
-          } else if (previousDate) {
-            if (differenceInDays(previousDate, standupDate) === 1) {
-              currentStreak++;
-            } else {
-              break; // Gap in standups, so streak is broken
-            }
-          }
-          previousDate = standupDate;
+        if (profilesError) {
+          console.error('Error fetching profiles:', profilesError);
+        } else {
+          profilesMap = new Map(profilesData.map((p) => [p.id, p.email]));
         }
       }
-      setStreak(currentStreak);
+      
+    const { data: orgMembers, error: orgMembersError } = await supabase
+    .from('org_members')
+    .select('user_id, invited_email')
+    .eq('org_id', organization.id);
 
-    } catch (error: any) {
-      setError(error.message);
-      toast.error(`Error loading stats: ${error.message}`);
-    } finally {
-      clearTimeout(timeout);
-      setLoading(false);
+    let invitedEmailsMap = new Map();
+    if (orgMembersError) {
+        console.error('Error fetching org members:', orgMembersError);
+    } else {
+        invitedEmailsMap = new Map(orgMembers.map(m => [m.user_id, m.invited_email]));
     }
-  };
+
+
+      const enrichedStandups: Standup[] = teamStandupsData.map((standup) => ({
+        id: standup.id,
+        yesterday: standup.yesterday,
+        today: standup.today,
+        blockers: standup.blockers,
+        standup_date: standup.standup_date,
+        profiles: {
+          id: standup.user_id,
+          email: profilesMap.get(standup.user_id) || invitedEmailsMap.get(standup.user_id) || 'Email not found',
+        },
+      }));
+
+      setTeamStandupsToday(enrichedStandups);
+    }
+
+    const { data: userStats, error: userStatsError } = await supabase
+      .from('user_standup_stats')
+      .select('total_standups, current_streak')
+      .eq('user_id', user.id)
+      .eq('org_id', organization.id)
+      .maybeSingle();
+
+    if (userStatsError) {
+      console.error('Error fetching user stats:', userStatsError);
+      hasError = true;
+    } else if (isMounted.current) {
+      setTotalStandups(userStats?.total_standups || 0);
+      setStreak(userStats?.current_streak || 0);
+    }
+
+    const { count: membersCount, error: membersError } = await supabase
+      .from('org_members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('org_id', organization.id)
+      .eq('status', 'active');
+
+    if (membersError) {
+      console.error('Error fetching team members:', membersError);
+      hasError = true;
+    } else if (isMounted.current) {
+      setTotalTeamMembers(membersCount || 0);
+    }
+
+    if (isMounted.current) {
+      setTeamStandupsTodayCount(teamStandupsToday.length);
+      setLoading(false);
+      if (hasError) {
+        setError('Some dashboard stats failed to load. Please try again later.');
+        toast.error('Some dashboard stats failed to load.');
+      }
+    }
+  }, [user, organization, teamStandupsToday.length]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+    if (!organization && userOrgs.length === 0) {
+      navigate('/onboarding');
+      return;
+    }
+    if (organization) {
+      loadStats();
+    }
+  }, [authLoading, user, organization, userOrgs, navigate, loadStats]);
+
+  useEffect(() => {
+    if (organization) {
+      setTeamStandupsTodayCount(teamStandupsToday.length);
+    }
+  }, [teamStandupsToday, organization]);
 
   const formatDate = () => {
     return new Date().toLocaleDateString('en-US', {
@@ -130,24 +200,42 @@ export default function Dashboard() {
     });
   };
 
-  if (loading) {
+  const StatCard = ({ title, value, icon: Icon, subValue, loading }: StatCardProps) => {
+    const displayValue = loading || value === null ? '...' : value;
     return (
-      <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
-        <p>Loading dashboard...</p>
+      <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-2">
+          <Icon className="w-5 h-5 text-amber-500" />
+          <h3 className="text-sm font-medium text-gray-400">{title}</h3>
+        </div>
+        <p className="text-3xl font-semibold text-white">
+          {displayValue}
+          {subValue !== undefined && !loading && ` / ${subValue}`}
+        </p>
       </div>
     );
-  }
+  };
 
-  if (error) {
+  const StreakCard = ({ title, value, icon: Icon, loading }: StreakCardProps) => {
+    const displayValue = loading || value === null ? '...' : value;
+    const label = value === 1 ? 'day' : 'days';
     return (
-      <div className="min-h-screen bg-[#0f0f0f] text-white flex flex-col items-center justify-center">
-        <p className="mb-4">{error}</p>
-        <button
-          onClick={loadStats}
-          className="bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold py-2 px-4 rounded-lg transition-colors"
-        >
-          Try Again
-        </button>
+      <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-2">
+          <Icon className="w-5 h-5 text-amber-500" />
+          <h3 className="text-sm font-medium text-gray-400">{title}</h3>
+        </div>
+        <p className="text-3xl font-semibold text-white">
+          {displayValue} {!loading && label}
+        </p>
+      </div>
+    );
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
+        <p>Loading...</p>
       </div>
     );
   }
@@ -164,50 +252,93 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {error && !loading && (
+        <div className="bg-red-900/20 border border-red-500/30 text-red-300 p-4 rounded-lg mb-6">
+          <p>{error}</p>
+          <button
+            onClick={loadStats}
+            className="mt-2 bg-red-500/50 hover:bg-red-500/70 text-white font-semibold py-1 px-3 rounded-lg text-sm transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {!loading && (
+        <div className={`p-4 rounded-lg mb-6 flex items-center gap-3 ${submittedToday ? 'bg-green-900/20 border border-green-500/30 text-green-300' : 'bg-amber-900/20 border border-amber-500/30 text-amber-300'}`}>
+            {submittedToday ? <CheckCircle size={20} /> : <XCircle size={20} />}
+            <p className="font-medium">
+                {submittedToday ? "You've submitted your standup for today. Great job!" : "You have not submitted your standup for today."}
+            </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <TrendingUp className="w-5 h-5 text-amber-500" />
-            <h3 className="text-sm font-medium text-gray-400">Your Total Standups</h3>
-          </div>
-          <p className="text-3xl font-semibold text-white">
-            {totalStandups}
-          </p>
-        </div>
-
-        <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Users className="w-5 h-5 text-amber-500" />
-            <h3 className="text-sm font-medium text-gray-400">Team Submitted Today</h3>
-          </div>
-          <p className="text-3xl font-semibold text-white">
-            {teamStandupsTodayCount} / {totalTeamMembers}
-          </p>
-        </div>
-
-        <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Flame className="w-5 h-5 text-amber-500" />
-            <h3 className="text-sm font-medium text-gray-400">Your Streak</h3>
-          </div>
-          <p className="text-3xl font-semibold text-white">
-            {streak} {streak === 1 ? 'day' : 'days'}
-          </p>
-        </div>
+        <StatCard
+          title="Your Total Standups"
+          value={totalStandups}
+          icon={TrendingUp}
+          loading={loading}
+        />
+        <StatCard
+          title="Team Submitted Today"
+          value={teamStandupsTodayCount}
+          subValue={totalTeamMembers}
+          icon={Users}
+          loading={loading}
+        />
+        <StreakCard title="Your Streak" value={streak} icon={Flame} loading={loading} />
       </div>
 
-      <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-8 text-center">
-        <h2 className="text-xl font-semibold text-white mb-3">Ready to log today's standup?</h2>
-        <p className="text-gray-400 mb-6">
-          Keep track of your progress and stay accountable to your goals
-        </p>
-        <button
-          onClick={() => navigate('/new-standup')}
-          className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold py-3 px-6 rounded-lg transition-colors"
-        >
-          <PlusCircle className="w-5 h-5" />
-          Log Today's Standup
-        </button>
+      {!loading && !submittedToday && (
+        <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-8 text-center mb-8">
+          <h2 className="text-xl font-semibold text-white mb-3">Ready to log today's standup?</h2>
+          <p className="text-gray-400 mb-6">Keep track of your progress and stay accountable to your goals</p>
+          <button
+            onClick={() => navigate('/new-standup')}
+            className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold py-3 px-6 rounded-lg transition-colors"
+          >
+            <PlusCircle className="w-5 h-5" />
+            Log Today's Standup
+          </button>
+        </div>
+      )}
+
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-white mb-4">Today's Team Standups</h2>
+        {loading ? (
+          <p className="text-gray-400">Loading team standups...</p>
+        ) : teamStandupsToday.length > 0 ? (
+          <div className="space-y-4">
+            {teamStandupsToday.map((standup) => (
+              <div key={standup.id} className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-6">
+                <p className="text-sm font-semibold text-amber-500 mb-3">{standup.profiles?.email}</p>
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-400 mb-1">Yesterday</h4>
+                    <p className="text-white whitespace-pre-wrap">{standup.yesterday}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-400 mb-1">Today</h4>
+                    <p className="text-white whitespace-pre-wrap">{standup.today}</p>
+                  </div>
+                  {standup.blockers && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-400 mb-1">Blockers</h4>
+                      <p className="text-white whitespace-pre-wrap">{standup.blockers}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-12 text-center">
+            <Users className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-white mb-2">No Standups Today</h3>
+            <p className="text-gray-400">Your team has not submitted any standups for today yet.</p>
+          </div>
+        )}
       </div>
     </div>
   );

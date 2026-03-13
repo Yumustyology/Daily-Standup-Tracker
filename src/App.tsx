@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -10,16 +9,17 @@ import History from './pages/History';
 import Onboarding from './pages/Onboarding';
 import Team from './pages/Team';
 import AuthCallback from './pages/AuthCallback';
+import Invite from './pages/Invite';
 import { Toaster } from 'react-hot-toast';
 import { ErrorBoundary, FallbackProps } from 'react-error-boundary';
+import OrgGuard from './routes/OrgGuard';
 
-// Error Fallback Component defined directly in App.tsx
 const ErrorFallback = ({ error, resetErrorBoundary }: FallbackProps) => {
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center p-4" role="alert">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-8 w-full max-w-md shadow-lg text-center">
         <h1 className="text-2xl font-semibold text-red-500 mb-4">Something went wrong</h1>
-        <p className="text-gray-400 mb-6">{error.message}</p>
+        <p className="text-gray-400 mb-6">{(error as Error).message}</p>
         <button
           onClick={resetErrorBoundary}
           className="bg-amber-500 text-black py-2 px-4 rounded-lg font-semibold hover:bg-amber-600 transition-colors duration-200"
@@ -32,15 +32,7 @@ const ErrorFallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 };
 
 function AppRoutes() {
-  const { user, loading, organization } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center">
-        <div className="text-white">Loading...</div>
-      </div>
-    );
-  }
+  const { user, organization } = useAuth();
 
   return (
     <Routes>
@@ -48,24 +40,33 @@ function AppRoutes() {
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Navigate to="/auth" replace />} />
 
-      {/* Onboarding Route: Only accessible if user is logged in but has no organization */}
-      <Route
-        path="/onboarding"
+      <Route 
+        path="/invite"
         element={
           <ProtectedRoute>
-            {user && !organization ? <Onboarding /> : <Navigate to="/dashboard" replace />}
+            <Invite />
           </ProtectedRoute>
         }
       />
 
-      {/* Protected Routes that require an organization */}
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            {!organization ? <Onboarding /> : <Navigate to="/dashboard" />}
+          </ProtectedRoute>
+        }
+      />
+
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Dashboard />
-            </Layout>
+            <OrgGuard>
+              <Layout>
+                <Dashboard />
+              </Layout>
+            </OrgGuard>
           </ProtectedRoute>
         }
       />
@@ -73,9 +74,11 @@ function AppRoutes() {
         path="/new-standup"
         element={
           <ProtectedRoute>
-            <Layout>
-              <NewStandup />
-            </Layout>
+            <OrgGuard>
+              <Layout>
+                <NewStandup />
+              </Layout>
+            </OrgGuard>
           </ProtectedRoute>
         }
       />
@@ -83,9 +86,11 @@ function AppRoutes() {
         path="/history"
         element={
           <ProtectedRoute>
-            <Layout>
-              <History />
-            </Layout>
+            <OrgGuard>
+              <Layout>
+                <History />
+              </Layout>
+            </OrgGuard>
           </ProtectedRoute>
         }
       />
@@ -93,9 +98,11 @@ function AppRoutes() {
         path="/team"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Team />
-            </Layout>
+            <OrgGuard>
+              <Layout>
+                <Team />
+              </Layout>
+            </OrgGuard>
           </ProtectedRoute>
         }
       />

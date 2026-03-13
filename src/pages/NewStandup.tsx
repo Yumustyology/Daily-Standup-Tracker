@@ -28,6 +28,7 @@ export default function NewStandup() {
   };
 
   useEffect(() => {
+    setHasSubmittedToday(false); // Reset on user/org change
     const checkExistingStandup = async () => {
       if (user?.id && organization?.id) {
         setLoading(true);
@@ -78,10 +79,6 @@ export default function NewStandup() {
 
       const { error: submitError } = await supabase.from('standups').insert(standupData);
       if (submitError) throw new Error(`Failed to save standup: ${submitError.message}`);
-
-      // Manually trigger the database function to update user stats
-      // const { error: userStatsError } = await supabase.rpc('update_user_standup_stats', { p_user_id: user.id, p_org_id: organization.id });
-      // if (userStatsError) throw new Error(`Failed to update user stats: ${userStatsError.message}`);
 
       toast.success('Standup saved successfully!');
       navigate('/history');

@@ -68,9 +68,9 @@ export default function Dashboard() {
       .eq('user_id', user.id)
       .eq('org_id', organization.id)
       .eq('standup_date', today)
-      .single();
+      .maybeSingle();
 
-    if (todayStandupError && todayStandupError.code !== 'PGRST116') {
+    if (todayStandupError) {
       console.error("Error checking for today's standup:", todayStandupError);
       hasError = true;
     } else if (isMounted.current) {
@@ -137,9 +137,9 @@ export default function Dashboard() {
       .select('total_standups, current_streak')
       .eq('user_id', user.id)
       .eq('org_id', organization.id)
-      .single();
+      .maybeSingle();
 
-    if (userStatsError && userStatsError.code !== 'PGRST116') {
+    if (userStatsError) {
       console.error('Error fetching user stats:', userStatsError);
       hasError = true;
     } else if (isMounted.current) {

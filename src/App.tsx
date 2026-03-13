@@ -14,7 +14,6 @@ import { Toaster } from 'react-hot-toast';
 import { ErrorBoundary, FallbackProps } from 'react-error-boundary';
 import OrgGuard from './routes/OrgGuard';
 
-// Error Fallback Component defined directly in App.tsx
 const ErrorFallback = ({ error, resetErrorBoundary }: FallbackProps) => {
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center p-4" role="alert">
@@ -33,7 +32,7 @@ const ErrorFallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 };
 
 function AppRoutes() {
-  const { user, organization, pendingInvites } = useAuth();
+  const { user, organization } = useAuth();
 
   return (
     <Routes>
@@ -41,17 +40,15 @@ function AppRoutes() {
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Navigate to="/auth" replace />} />
 
-      {/* Invite Route: Accessible if user has pending invites */}
       <Route 
         path="/invite"
         element={
           <ProtectedRoute>
-            {pendingInvites.length > 0 ? <Invite /> : <Navigate to="/dashboard" />}
+            <Invite />
           </ProtectedRoute>
         }
       />
 
-      {/* Onboarding Route: Only accessible if user is logged in but has no organization */}
       <Route
         path="/onboarding"
         element={
@@ -61,7 +58,6 @@ function AppRoutes() {
         }
       />
 
-      {/* Protected Routes that require an organization */}
       <Route
         path="/dashboard"
         element={

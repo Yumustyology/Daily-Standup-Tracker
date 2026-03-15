@@ -4,7 +4,7 @@ import { ChevronsUpDown, Plus, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const TeamSwitcher = () => {
-  const { user, organization, userOrgs, setActiveOrg, createOrganization } = useAuth();
+  const { organization, userOrgs, setActiveOrg, createOrganization } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const [isCreating, setIsCreating] = useState(false);

@@ -66,7 +66,27 @@ const Layout = ({ children }: { children: ReactNode }) => {
               <li><NavLink to="/new-standup" className={({isActive}) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-amber-500 text-black' : 'hover:bg-[#1f1f1f]'}`}><Clock size={20}/>New Standup</NavLink></li>
               <li><NavLink to="/history" className={({isActive}) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-amber-500 text-black' : 'hover:bg-[#1f1f1f]'}`}><Users size={20}/>History</NavLink></li>
               <li><NavLink to="/team" className={({isActive}) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-amber-500 text-black' : 'hover:bg-[#1f1f1f]'}`}><Users size={20}/>Team</NavLink></li>
-              <li><NavLink to="/invite" className={({isActive}) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-amber-500 text-black' : 'hover:bg-[#1f1f1f]'}`}><Mail size={20}/>Invites {inviteCount > 0 && <span className="bg-amber-500 text-black text-xs font-bold px-2 py-0.5 rounded-full">{inviteCount}</span>}</NavLink></li>
+              <li>
+                <NavLink to="/invite">
+                  {({ isActive }) => (
+                    <div
+                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium ${
+                        isActive ? 'bg-amber-500 text-black' : 'hover:bg-[#1f1f1f]'
+                      }`}>
+                      <Mail size={20} />
+                      <span>Invites</span>
+                      {inviteCount > 0 && (
+                        <span
+                          className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                            isActive ? 'bg-amber-800 text-amber-100' : 'bg-amber-500 text-black'
+                          }`}>
+                          {inviteCount}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </NavLink>
+              </li>
             </ul>
           </nav>
           <div>

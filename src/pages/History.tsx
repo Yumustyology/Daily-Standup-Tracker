@@ -88,7 +88,6 @@ export default function History() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    // Adjust for timezone to avoid showing the previous day
     const userTimezoneOffset = date.getTimezoneOffset() * 60000;
     return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('en-US', {
       weekday: 'long',

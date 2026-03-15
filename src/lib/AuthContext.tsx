@@ -20,6 +20,7 @@ interface AuthContextType {
   setActiveOrg: (org: Organisation) => Promise<void>;
   signOut: () => Promise<void>;
   createOrganization: (name: string) => Promise<{ error: Error | null; data: Organisation | null; }>;
+  refreshUserOrgs: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -196,9 +197,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const refreshUserOrgs = useCallback(async () => {
+    if (user) {
+      await fetchUserOrgsAndSetRole(user);
+    }
+  }, [user, fetchUserOrgsAndSetRole]);
+
   const value = {
     user, session, loading, organization, userRole, userOrgs,
-    setOrganization, setActiveOrg, signOut, createOrganization
+    setOrganization, setActiveOrg, signOut, createOrganization, refreshUserOrgs
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

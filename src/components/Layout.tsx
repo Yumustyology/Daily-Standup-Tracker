@@ -12,13 +12,14 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   const handleLogout = async () => {
-    const { error } = await signOut();
-    setIsLogoutModalOpen(false);
-    if (error) {
-      showToast(error.message, 'error');
-    } else {
+    try {
+      await signOut();
       showToast('Logged out successfully!', 'success');
       navigate('/auth');
+    } catch (error: any) {
+      showToast(error.message, 'error');
+    } finally {
+      setIsLogoutModalOpen(false);
     }
   };
 

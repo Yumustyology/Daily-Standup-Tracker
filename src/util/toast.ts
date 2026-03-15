@@ -22,7 +22,6 @@ type ToastType = 'success' | 'error' | 'info' | 'warning' | 'loading';
  *
  * @example
  * // For loading state, you can use the 'loading' type.
- * // You can later update the toast using the id returned from the initial call.
  * const toastId = toast.loading('Performing action...');
  * //... some async action
  * toast.success('Action completed!', { id: toastId });

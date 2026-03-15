@@ -2,7 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 
 export default function OrgGuard({ children }: { children: React.ReactNode }) {
-  const { organization, loading } = useAuth(); // Depend on loading from useAuth
+  const { organization, loading } = useAuth();
 
   if (loading) {
     return null;

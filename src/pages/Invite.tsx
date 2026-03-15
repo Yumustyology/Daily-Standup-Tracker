@@ -76,9 +76,7 @@ export default function InvitesPage() {
         <div className="max-w-2xl space-y-4">
           {invites.map(invite => (
             <div key={invite.id} className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col">
-                <p className="font-semibold">You've been invited to join <span className="text-amber-500">{invite.organisations.name}</span></p>
-              </div>
+              <p className="font-semibold text-sm">You've been invited to join <span className="text-amber-500">{invite.organisations.name}</span></p>
               <div className="flex gap-2 shrink-0">
                 <button
                   onClick={() => handleJoin(invite)}

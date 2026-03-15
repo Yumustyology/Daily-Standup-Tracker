@@ -32,13 +32,17 @@ const ErrorFallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 };
 
 function AppRoutes() {
-  const { user, organization } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return null; 
+  }
 
   return (
     <Routes>
-      <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <Auth />} />
+      <Route path="/auth" element={user ? <Navigate to="/onboarding" replace /> : <Auth />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
-      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Navigate to="/auth" replace />} />
+      <Route path="/" element={user ? <Navigate to="/onboarding" replace /> : <Navigate to="/auth" replace />} />
 
       <Route 
         path="/invite"
@@ -53,7 +57,7 @@ function AppRoutes() {
         path="/onboarding"
         element={
           <ProtectedRoute>
-            {!organization ? <Onboarding /> : <Navigate to="/dashboard" />}
+            <Onboarding />
           </ProtectedRoute>
         }
       />

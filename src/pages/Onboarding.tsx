@@ -22,31 +22,35 @@ const Onboarding = () => {
 
   useEffect(() => {
     if (authLoading || !user) return;
-
+  
     const checkAndRedirect = async () => {
       setLoading(true);
-
+  
       const { data, error } = await supabase
         .from('org_members')
         .select('id, organisations (id, name)')
         .eq('invited_email', user.email!)
         .eq('status', 'pending');
-
+  
       if (error && error.code !== 'PGRST116') {
-        console.error('Error checking for pending invites:', error.message);
         toast.error('Could not check for invitations.');
       } else if (data && data.length > 0) {
         setPendingInvites(data as unknown as PendingInvite[]);
-      } else {
-        if (organization || userOrgs.length > 0) {
-          navigate('/dashboard');
-        }
       }
+     
       setLoading(false);
     };
-
+  
     checkAndRedirect();
   }, [user, authLoading]);
+  
+  useEffect(() => {
+    if (authLoading || loading) return;
+    if (pendingInvites.length > 0) return;
+    if (organization || userOrgs.length > 0) {
+      navigate('/dashboard');
+    }
+  }, [authLoading, loading, organization, userOrgs, pendingInvites, navigate]);
 
   const handleJoinOrg = async (inviteId: string) => {
     if (!user) return;

@@ -31,8 +31,6 @@ const TeamSwitcher = () => {
     setIsCreating(true);
     const { data, error } = await createOrganization(newOrgName);
     if (!error && data) {
-      // AuthContext now handles setting the new org as active.
-      // We just need to close the switcher UI.
       setNewOrgName('');
       setIsOpen(false);
     }

@@ -9,7 +9,7 @@ import History from './pages/History';
 import Onboarding from './pages/Onboarding';
 import Team from './pages/Team';
 import AuthCallback from './pages/AuthCallback';
-import Invite from './pages/Invite';
+import InvitesPage from './pages/Invite';
 import { Toaster } from 'react-hot-toast';
 import { ErrorBoundary, FallbackProps } from 'react-error-boundary';
 import OrgGuard from './routes/OrgGuard';
@@ -43,15 +43,6 @@ function AppRoutes() {
       <Route path="/auth" element={user ? <Navigate to="/onboarding" replace /> : <Auth />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/" element={user ? <Navigate to="/onboarding" replace /> : <Navigate to="/auth" replace />} />
-
-      <Route 
-        path="/invite"
-        element={
-          <ProtectedRoute>
-            <Invite />
-          </ProtectedRoute>
-        }
-      />
 
       <Route
         path="/onboarding"
@@ -107,6 +98,17 @@ function AppRoutes() {
                 <Team />
               </Layout>
             </OrgGuard>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route 
+        path="/invite"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <InvitesPage />
+            </Layout>
           </ProtectedRoute>
         }
       />

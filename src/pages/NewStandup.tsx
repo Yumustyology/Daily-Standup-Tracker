@@ -28,7 +28,7 @@ export default function NewStandup() {
   };
 
   useEffect(() => {
-    setHasSubmittedToday(false); // Reset on user/org change
+    setHasSubmittedToday(false); 
     const checkExistingStandup = async () => {
       if (user?.id && organization?.id) {
         setLoading(true);

@@ -1,100 +1,104 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../lib/AuthContext';
+import { useAuth, Organisation } from '../lib/AuthContext';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-interface Invitation {
+interface PendingInvite {
   id: string;
-  org_id: string;
   organisations: {
+    id: string;
     name: string;
-  }[];
+  };
 }
 
-export default function Invite() {
-  const { user } = useAuth();
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
+export default function InvitesPage() {
+  const { user, setActiveOrg, refreshUserOrgs } = useAuth();
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchInvitations = async () => {
-      if (!user) return;
-
-      try {
-        const { data, error } = await supabase
-          .from('org_members')
-          .select('id, org_id, organisations(name)')
-          .eq('invited_email', user.email)
-          .eq('status', 'pending');
-
-        if (error) {
-          throw error;
-        }
-
-        if (data) {
-          const validInvitations = data.filter((invite: any) => invite.organisations && invite.organisations.length > 0);
-          setInvitations(validInvitations as Invitation[]);
-        }
-
-      } catch (error: any) {
-        toast.error('Failed to fetch invitations');
-      } finally {
-        setLoading(false);
+    const fetchInvites = async () => {
+      if (!user?.email) return;
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('org_members')
+        .select('id, organisations (id, name)')
+        .eq('invited_email', user.email)
+        .eq('status', 'pending');
+      
+      if (error) {
+        toast.error('Could not fetch invitations.');
+        console.error(error);
+      } else {
+        setInvites(data as unknown as PendingInvite[]);
       }
+      setLoading(false);
     };
-
-    fetchInvitations();
+    fetchInvites();
   }, [user]);
 
-  const handleAccept = async (membershipId: string) => {
-    try {
-      const { error } = await supabase
-        .from('org_members')
-        .update({ status: 'active', joined_at: new Date().toISOString() })
-        .eq('id', membershipId);
+  const handleJoin = async (invite: PendingInvite) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('org_members')
+      .update({ status: 'active', user_id: user.id, joined_at: new Date().toISOString() })
+      .eq('id', invite.id);
 
-      if (error) {
-        throw error;
-      }
-
-      toast.success('Invitation accepted!');
+    if (error) {
+      toast.error(`Failed to join ${invite.organisations.name}.`);
+    } else {
+      toast.success(`Joined ${invite.organisations.name}!`);
+      await refreshUserOrgs();
+      await setActiveOrg(invite.organisations as Organisation);
+      setInvites(invites.filter(i => i.id !== invite.id));
       navigate('/dashboard');
-    } catch (error: any) {
-      toast.error('Failed to accept invitation');
     }
   };
 
-  if (loading) {
-    return <div>Loading invitations...</div>;
-  }
+  const handleDecline = async (inviteId: string) => {
+    const { error } = await supabase.from('org_members').delete().eq('id', inviteId);
+    if (error) {
+      toast.error('Failed to decline invitation.');
+    } else {
+      toast.success('Invitation declined.');
+      setInvites(invites.filter(i => i.id !== inviteId));
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
-      <div className="w-full max-w-md p-8 bg-[#111111] rounded-lg shadow-lg">
-        <h1 className="text-2xl font-semibold mb-6">Pending Invitations</h1>
-        {invitations.length > 0 ? (
-          <ul className="space-y-4">
-            {invitations.map(invite => (
-              <li key={invite.id} className="p-4 bg-[#1f1f1f] rounded-lg flex justify-between items-center">
-                <div>
-                  <p className="font-semibold">{invite.organisations[0]?.name}</p>
-                  <p className="text-sm text-gray-400">You have a pending invitation</p>
-                </div>
-                <button 
-                  onClick={() => handleAccept(invite.id)}
-                  className="bg-amber-500 text-black py-2 px-4 rounded-lg font-semibold hover:bg-amber-600 transition-colors"
+    <div className="p-4 md:p-6">
+      <h1 className="text-2xl font-semibold mb-6">My Invitations</h1>
+      {loading ? (
+        <p>Loading...</p>
+      ) : invites.length > 0 ? (
+        <div className="max-w-2xl space-y-4">
+          {invites.map(invite => (
+            <div key={invite.id} className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col">
+                <p className="font-semibold">You've been invited to join <span className="text-amber-500">{invite.organisations.name}</span></p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => handleJoin(invite)}
+                  className="bg-amber-500 text-black text-sm font-semibold py-1.5 px-3 rounded-lg hover:bg-amber-600 transition-colors"
                 >
-                  Accept
+                  Join
                 </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No pending invitations.</p>
-        )}
-      </div>
+                <button
+                  onClick={() => handleDecline(invite.id)}
+                  className="bg-[#2f2f2f] text-gray-400 text-sm py-1.5 px-3 rounded-lg hover:text-white transition-colors"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p>You have no pending invitations.</p>
+      )}
     </div>
   );
 }

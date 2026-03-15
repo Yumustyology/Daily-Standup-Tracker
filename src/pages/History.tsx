@@ -13,7 +13,7 @@ interface Standup {
   blockers: string;
   standup_date: string;
   created_at: string;
-  user_email: string; // Add user_email to the interface
+  user_email: string;
 }
 
 export default function History() {
@@ -21,7 +21,7 @@ export default function History() {
   const navigate = useNavigate();
   const [standups, setStandups] = useState<Standup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('me'); // 'me' or 'all'
+  const [view, setView] = useState('me');
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   useEffect(() => {

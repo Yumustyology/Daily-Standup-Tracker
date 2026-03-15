@@ -147,7 +147,7 @@ export default function Auth() {
               className="w-full flex items-center justify-center gap-2 bg-[#1f1f1f] hover:bg-[#2a2a2a] text-white font-semibold py-2 px-4 rounded-lg transition-colors"
             >
               <Mail className="w-5 h-5" />
-              Sign in with Google
+              {isLogin ? "Sign in with Google" : "Sign up with Google"}
             </button>
           </div>
 

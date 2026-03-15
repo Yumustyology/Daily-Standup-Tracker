@@ -4,6 +4,7 @@ import { useAuth } from '../lib/AuthContext';
 import { LogOut, LayoutDashboard, Users, Clock } from 'lucide-react';
 import TeamSwitcher from './TeamSwitcher';
 import Modal from './Modal';
+import { showToast } from '../util/toast';
 
 const Layout = ({ children }: { children: ReactNode }) => {
   const { user, signOut } = useAuth();
@@ -11,9 +12,14 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   const handleLogout = async () => {
-    await signOut();
+    const { error } = await signOut();
     setIsLogoutModalOpen(false);
-    navigate('/auth');
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      showToast('Logged out successfully!', 'success');
+      navigate('/auth');
+    }
   };
 
   return (

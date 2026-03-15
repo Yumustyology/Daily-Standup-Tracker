@@ -2,7 +2,7 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Coffee, Eye, EyeOff, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
+import { showToast } from "../util/toast";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -21,8 +21,9 @@ export default function Auth() {
       : await supabase.auth.signUp({ email, password });
 
     if (error) {
-      toast.error(error.message);
+      showToast(error.message, 'error');
     } else {
+      showToast(isLogin ? 'Logged in successfully!' : 'Signed up successfully!', 'success');
       navigate("/dashboard");
     }
 
@@ -30,12 +31,12 @@ export default function Auth() {
   };
 
   const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
     });
+    if (error) {
+      showToast(error.message, 'error');
+    }
   };
 
   return (

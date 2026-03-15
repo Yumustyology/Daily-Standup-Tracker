@@ -22,15 +22,14 @@ const Onboarding = () => {
 
   useEffect(() => {
     if (authLoading) return;
-    if (organization || userOrgs.length > 0) {
-      navigate('/dashboard');
-    }
-  }, [organization, userOrgs, authLoading, navigate]);
 
-  useEffect(() => {
-    const checkInvites = async () => {
-      if (!user) return;
+    const checkAndRedirect = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
+
       const { data, error } = await supabase
         .from('org_members')
         .select('id, organisations (id, name)')
@@ -40,16 +39,20 @@ const Onboarding = () => {
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error checking for pending invites:', error.message);
+        toast.error('Could not check for invitations.');
       } else if (data && data.length > 0) {
-        setPendingInvite(data[0] as unknown as PendingInvite);
+        const invite = data[0] as unknown as PendingInvite;
+        setPendingInvite(invite);
+      } else {
+        if (organization || userOrgs.length > 0) {
+          navigate('/dashboard');
+        }
       }
       setLoading(false);
     };
 
-    if (!authLoading) {
-        checkInvites();
-    }
-  }, [user, authLoading]);
+    checkAndRedirect();
+  }, [user, authLoading, organization, userOrgs, navigate]);
 
   const handleJoinOrg = async () => {
     if (!user || !pendingInvite) return;
@@ -72,6 +75,27 @@ const Onboarding = () => {
       navigate('/dashboard');
     } else {
       toast.error('Could not retrieve organization details after joining.');
+    }
+    setLoading(false);
+  };
+
+  const handleRejectInvite = async () => {
+    if (!pendingInvite) return;
+    setLoading(true);
+
+    const { error } = await supabase
+      .from('org_members')
+      .delete()
+      .eq('id', pendingInvite.id);
+
+    if (error) {
+      toast.error('Failed to decline invitation.');
+    } else {
+      toast.success('Invitation declined.');
+      setPendingInvite(null);
+      if (organization || userOrgs.length > 0) {
+        navigate('/dashboard');
+      }
     }
     setLoading(false);
   };
@@ -106,24 +130,36 @@ const Onboarding = () => {
     return (
       <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center p-4">
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-8 w-full max-w-md shadow-lg text-center">
-           <h1 className="text-3xl font-semibold text-white mb-4">You've been invited!</h1>
-           <p className="text-gray-400 mb-8">You have a pending invitation to join <span className='text-amber-500 font-semibold'>{pendingInvite.organisations.name}</span>.</p>
-           <div className="space-y-4">
-             <button
-              onClick={handleJoinOrg}
-              className="w-full bg-amber-500 text-black py-2 rounded-lg font-semibold hover:bg-amber-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isCreating}
-            >
-              {isCreating ? 'Joining...' : `Join ${pendingInvite.organisations.name}`}
-            </button>
+          <h1 className="text-3xl font-semibold text-white mb-4">You've been invited!</h1>
+          <p className="text-gray-400 mb-8">
+            You have a pending invitation to join{' '}
+            <span className="text-amber-500 font-semibold">{pendingInvite.organisations.name}</span>.
+          </p>
+          <div className="space-y-4">
             <button
-              onClick={handleCreateOwnWorkspace}
-              className="w-full bg-gray-700 text-white py-2 rounded-lg font-semibold hover:bg-gray-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isCreating}
+              onClick={handleJoinOrg}
+              disabled={isCreating || loading}
+              className="w-full bg-amber-500 text-black py-2 rounded-lg font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isCreating ? 'Creating...' : 'Create my own workspace instead'}
+              {loading ? 'Joining...' : `Join ${pendingInvite.organisations.name}`}
             </button>
-           </div>
+            {userOrgs.length === 0 && (
+              <button
+                onClick={handleCreateOwnWorkspace}
+                disabled={isCreating || loading}
+                className="w-full bg-gray-700 text-white py-2 rounded-lg font-semibold hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCreating ? 'Creating...' : 'Create my own workspace instead'}
+              </button>
+            )}
+            <button
+              onClick={handleRejectInvite}
+              disabled={isCreating || loading}
+              className="w-full text-gray-400 hover:text-white py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+            >
+              Decline invitation
+            </button>
+          </div>
         </div>
       </div>
     );

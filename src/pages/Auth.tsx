@@ -1,12 +1,13 @@
-import { useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { Coffee, Eye, EyeOff, Mail } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import { supabase } from "../lib/supabase";
+import { Coffee, Eye, EyeOff, Mail } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -15,23 +16,27 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
 
-    const action = isLogin ? supabase.auth.signInWithPassword : supabase.auth.signUp;
-    const { error } = await action({ email, password });
+    const { error } = isLogin
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password });
 
-    if (!error) {
-      navigate('/dashboard');
+    if (error) {
+      toast.error(error.message);
+    } else {
+      navigate("/dashboard");
     }
+
     setLoading(false);
   };
 
   const signInWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-  }
+  };
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center p-4">
@@ -41,17 +46,22 @@ export default function Auth() {
             <Coffee className="w-8 h-8 text-amber-500" />
             <h1 className="text-3xl font-semibold text-white">StandupLog</h1>
           </div>
-          <p className="text-gray-400 text-sm">Track your daily standups with ease</p>
+          <p className="text-gray-400 text-sm">
+            Track your daily standups with ease
+          </p>
         </div>
 
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-lg p-8">
           <h2 className="text-xl font-semibold text-white mb-6">
-            {isLogin ? 'Sign in to your account' : 'Create your account'}
+            {isLogin ? "Sign in to your account" : "Create your account"}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
                 Email
               </label>
               <input
@@ -66,13 +76,16 @@ export default function Auth() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
                 Password
               </label>
               <div className="relative">
                 <input
                   id="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -85,7 +98,11 @@ export default function Auth() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-white"
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
@@ -95,7 +112,7 @@ export default function Auth() {
               disabled={loading}
               className="w-full bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Sign Up'}
+              {loading ? "Processing..." : isLogin ? "Sign In" : "Sign Up"}
             </button>
           </form>
 
@@ -104,7 +121,9 @@ export default function Auth() {
               <div className="w-full border-t border-gray-600"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="bg-[#111111] px-2 text-gray-400">Or continue with</span>
+              <span className="bg-[#111111] px-2 text-gray-400">
+                Or continue with
+              </span>
             </div>
           </div>
 
@@ -123,7 +142,9 @@ export default function Auth() {
               onClick={() => setIsLogin(!isLogin)}
               className="text-sm text-gray-400 hover:text-amber-500 transition-colors"
             >
-              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+              {isLogin
+                ? "Don't have an account? Sign up"
+                : "Already have an account? Sign in"}
             </button>
           </div>
         </div>

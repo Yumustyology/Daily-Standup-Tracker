@@ -21,13 +21,9 @@ const Onboarding = () => {
   const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(null);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || !user) return;
 
     const checkAndRedirect = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
       setLoading(true);
 
       const { data, error } = await supabase
@@ -41,18 +37,18 @@ const Onboarding = () => {
         console.error('Error checking for pending invites:', error.message);
         toast.error('Could not check for invitations.');
       } else if (data && data.length > 0) {
-        const invite = data[0] as unknown as PendingInvite;
-        setPendingInvite(invite);
+        setPendingInvite(data[0] as unknown as PendingInvite);
       } else {
         if (organization || userOrgs.length > 0) {
           navigate('/dashboard');
         }
       }
+
       setLoading(false);
     };
 
     checkAndRedirect();
-  }, [user, authLoading, organization, userOrgs, navigate]);
+  }, [user, authLoading]);
 
   const handleJoinOrg = async () => {
     if (!user || !pendingInvite) return;

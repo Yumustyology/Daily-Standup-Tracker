@@ -11,6 +11,7 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,8 +24,13 @@ export default function Auth() {
     if (error) {
       showToast(error.message, 'error');
     } else {
-      showToast(isLogin ? 'Logged in successfully!' : 'Signed up successfully!', 'success');
-      navigate("/dashboard");
+      if (isLogin) {
+        showToast('Logged in successfully!', 'success');
+        navigate("/dashboard");
+      } else {
+        showToast('Signed up successfully!', 'success');
+        setShowVerificationMessage(true);
+      }
     }
 
     setLoading(false);
@@ -38,6 +44,19 @@ export default function Auth() {
       showToast(error.message, 'error');
     }
   };
+
+  if (showVerificationMessage) {
+    return (
+      <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-[#111111] border border-[#1f1f1f] rounded-lg p-8 text-center">
+          <h2 className="text-2xl font-semibold text-white mb-4">Check your email</h2>
+          <p className="text-gray-400">
+            We've sent a verification link to your email address. Please check your inbox and follow the instructions to complete your registration.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center p-4">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Coffee, Eye, EyeOff, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -39,6 +39,9 @@ export default function Auth() {
   const signInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
     if (error) {
       showToast(error.message, 'error');
@@ -46,16 +49,7 @@ export default function Auth() {
   };
 
   if (showVerificationMessage) {
-    return (
-      <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-[#111111] border border-[#1f1f1f] rounded-lg p-8 text-center">
-          <h2 className="text-2xl font-semibold text-white mb-4">Check your email</h2>
-          <p className="text-gray-400">
-            We've sent a verification link to your email address. Please check your inbox and follow the instructions to complete your registration.
-          </p>
-        </div>
-      </div>
-    );
+    return <VerificationMessage setIsLogin={setIsLogin} setShowVerificationMessage={setShowVerificationMessage} />;
   }
 
   return (
@@ -168,6 +162,43 @@ export default function Auth() {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface VerificationMessageProps {
+  setIsLogin: (value: boolean) => void;
+  setShowVerificationMessage: (value: boolean) => void;
+}
+
+function VerificationMessage({ setIsLogin, setShowVerificationMessage }: VerificationMessageProps) {
+  const [countdown, setCountdown] = useState(5);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => prev - 1);
+    }, 1000);
+
+    if (countdown === 0) {
+      clearInterval(timer);
+      setIsLogin(true);
+      setShowVerificationMessage(false);
+    }
+
+    return () => clearInterval(timer);
+  }, [countdown, setIsLogin, setShowVerificationMessage]);
+
+  return (
+    <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-[#111111] border border-[#1f1f1f] rounded-lg p-8 text-center">
+        <h2 className="text-2xl font-semibold text-white mb-4">Check your email</h2>
+        <p className="text-gray-400">
+          We\'ve sent a verification link to your email address. Please check your inbox and follow the instructions to complete your registration.
+        </p>
+        <p className="text-gray-500 mt-4 text-sm">
+          Redirecting to sign in page in {countdown} seconds...
+        </p>
       </div>
     </div>
   );
